@@ -1,0 +1,5 @@
+{
+  "name": "Zenith E-Book Reader",
+  "description": "An elegant e-book reader that allows users to import books from a cloud source (simulated Google Drive) and read them offline. It stores books locally in IndexedDB for fast access and supports various formats like EPUB, PDF, and TXT.",
+  "requestFramePermissions": []
+}
