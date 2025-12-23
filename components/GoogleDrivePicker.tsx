@@ -1,86 +1,191 @@
 
-import React, { useState, useCallback } from 'react';
-import type { MockFile } from '../types';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Spinner } from './Spinner';
 
+const SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
+
+// Type declarations for Google APIs loaded from scripts
+declare const gapi: any;
+declare const google: any;
+
 interface GoogleDrivePickerProps {
+  clientId: string;
+  apiKey: string;
   onClose: () => void;
   onFileSelect: (name: string, type: string, data: Blob) => Promise<void>;
 }
 
-const mockFiles: MockFile[] = [
-    { id: '1', name: 'Moby Dick.epub', mimeType: 'application/epub+zip', url: 'https://www.gutenberg.org/ebooks/2701.epub3.images', size: '5.2 MB' },
-    { id: '2', name: 'Alice in Wonderland.epub', mimeType: 'application/epub+zip', url: 'https://www.gutenberg.org/ebooks/11.epub3.images', size: '3.4 MB' },
-    { id: '3', name: 'The Art of War.pdf', mimeType: 'application/pdf', url: 'https://www.gutenberg.org/files/132/132-pdf.pdf', size: '0.5 MB' },
-    { id: '4', name: 'A Tale of Two Cities.txt', mimeType: 'text/plain', url: 'https://www.gutenberg.org/files/98/98-0.txt', size: '0.8 MB' },
-    { id: '5', name: 'Frankenstein.mobi', mimeType: 'application/x-mobipocket-ebook', url: '#', size: '0.6 MB' },
-    { id: '6', name: 'Dracula.djvu', mimeType: 'image/vnd.djvu', url: '#', size: '12.1 MB' }
-];
-
-export const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({ onClose, onFileSelect }) => {
-  const [loadingFile, setLoadingFile] = useState<string | null>(null);
+export const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({ clientId, apiKey, onClose, onFileSelect }) => {
+  const [status, setStatus] = useState('Initializing...');
   const [error, setError] = useState<string | null>(null);
+  const pickerApiLoaded = useRef(false);
+  const oauthToken = useRef<any>(null);
+  const [showCopySuccess, setShowCopySuccess] = useState(false);
 
-  const handleFileSelect = useCallback(async (file: MockFile) => {
-    if (file.url === '#') {
-        alert(`Sorry, the format .${file.name.split('.').pop()} is not supported for rendering.`);
-        return;
-    }
+  const handleResetClientId = () => {
+    localStorage.removeItem('google_client_id');
+    localStorage.removeItem('google_api_key');
+    window.location.reload();
+  };
 
-    setLoadingFile(file.id);
-    setError(null);
+  const copyOrigin = () => {
+    navigator.clipboard.writeText(window.location.origin);
+    setShowCopySuccess(true);
+    setTimeout(() => setShowCopySuccess(false), 2000);
+  };
 
-    try {
-      // Using a CORS proxy for fetching, as Gutenberg may block direct client-side requests.
-      const response = await fetch(`https://cors-anywhere.herokuapp.com/${file.url}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch book: ${response.statusText}`);
+  const pickerCallback = useCallback(async (data: any) => {
+    if (data.action === google.picker.Action.PICKED) {
+      const doc = data.docs[0];
+      setStatus(`Downloading ${doc.name}...`);
+      
+      try {
+        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${doc.id}?alt=media`, {
+          headers: {
+            'Authorization': `Bearer ${oauthToken.current.access_token}`
+          }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`Failed to download file: ${errorData.error?.message || response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        await onFileSelect(doc.name, doc.mimeType, blob);
+        onClose();
+
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || 'Could not download file. Ensure Drive API is enabled in your Google Cloud project.');
       }
-      const blob = await response.blob();
-      await onFileSelect(file.name, file.mimeType, blob);
+    } else if (data.action === google.picker.Action.CANCEL) {
       onClose();
-    } catch (err) {
-      console.error(err);
-      setError('Could not download file. Please try again. Note: A CORS proxy is used for this demo, which may be rate-limited.');
-    } finally {
-      setLoadingFile(null);
     }
   }, [onFileSelect, onClose]);
 
+  const createPicker = useCallback(() => {
+    if (!pickerApiLoaded.current || !oauthToken.current) return;
+    
+    setStatus('Opening file picker...');
+    try {
+        const view = new google.picker.View(google.picker.ViewId.DOCS);
+        view.setMimeTypes("application/epub+zip,application/pdf,text/plain");
+
+        const picker = new google.picker.PickerBuilder()
+          .addView(view)
+          .setOAuthToken(oauthToken.current.access_token)
+          .setDeveloperKey(apiKey)
+          .setCallback(pickerCallback)
+          .build();
+        picker.setVisible(true);
+    } catch (err: any) {
+        setError('Failed to create picker. Check if the API Key has the Drive API enabled and no strict restrictions.');
+    }
+  }, [pickerCallback, apiKey]);
+  
+  useEffect(() => {
+    // Log the Client ID being used for this authentication attempt.
+    console.log("Using Google Client ID for authentication:", clientId);
+
+    const initializeAndAuth = () => {
+        setStatus('Loading Google API...');
+        gapi.load('picker', () => {
+            pickerApiLoaded.current = true;
+            setStatus('Authenticating...');
+            try {
+                const tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: clientId,
+                    scope: SCOPES,
+                    callback: (tokenResponse: any) => {
+                        if (tokenResponse.error) {
+                            console.error('Auth Error:', tokenResponse);
+                            let detailedError = `Authentication failed: ${tokenResponse.error_description || tokenResponse.error}`;
+                            
+                            if (tokenResponse.error === 'invalid_request') {
+                                detailedError = "Error 400: Origin mismatch or wrong Project ID. Check Google Console origins.";
+                            }
+                            
+                            setError(detailedError);
+                            return;
+                        }
+                        oauthToken.current = tokenResponse;
+                        createPicker();
+                    },
+                });
+                tokenClient.requestAccessToken({ prompt: '' });
+            } catch (err: any) {
+                setError(`GSI Client Error: ${err.message}`);
+            }
+        });
+    };
+
+    const checkGapiReady = () => {
+        if (typeof gapi !== 'undefined' && typeof google !== 'undefined' && gapi.load && google.accounts) {
+            clearInterval(intervalId);
+            initializeAndAuth();
+        }
+    };
+
+    const intervalId = setInterval(checkGapiReady, 100);
+    return () => clearInterval(intervalId);
+  }, [createPicker, clientId]);
+
+  const isOriginError = error?.includes('Error 400');
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-        <div className="flex justify-between items-center p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">Select a Book from Drive</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
-        </div>
+    <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[200] p-4 backdrop-blur-md">
+      <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md text-center p-8 border border-gray-700 relative">
+        <button 
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-white"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {!error && <div className="flex justify-center mb-4"><Spinner /></div>}
         
-        {error && <div className="p-4 bg-red-800 text-white text-center">{error}</div>}
-
-        <div className="p-4 overflow-y-auto">
-          <div className="divide-y divide-gray-700">
-            {mockFiles.map(file => (
-              <div key={file.id} 
-                   onClick={() => !loadingFile && handleFileSelect(file)}
-                   className={`flex items-center justify-between p-3 rounded-md transition-colors duration-200 ${loadingFile ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-700'}`}>
-                <div className="flex items-center gap-4">
-                  <div className="text-indigo-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-100">{file.name}</p>
-                    <p className="text-sm text-gray-400">{file.size}</p>
-                  </div>
-                </div>
-                {loadingFile === file.id && <Spinner />}
-              </div>
-            ))}
+        <h2 className="text-2xl font-bold text-white mb-2">Google Drive</h2>
+        
+        {isOriginError ? (
+          <div className="mt-4 text-left text-sm leading-relaxed p-4 rounded-xl border text-red-300 bg-red-900/30 border-red-500/30">
+            <strong className="font-bold text-red-200 block mb-2">Error 400: Configuration Error</strong>
+            <p className="mb-3">This usually means your app's URL is not whitelisted in your Google Cloud Project.</p>
+            <p className="mb-1 text-xs text-red-200/70">Required URL:</p>
+            <div className="bg-gray-900/50 p-3 rounded-lg flex items-center justify-between border border-red-500/20">
+                <code className="text-red-200 text-xs font-mono">{window.location.origin}</code>
+                <button
+                    type="button"
+                    onClick={copyOrigin}
+                    className="text-xs bg-red-600 hover:bg-red-500 px-3 py-1 rounded transition-colors"
+                >
+                    {showCopySuccess ? 'Copied!' : 'Copy'}
+                </button>
+            </div>
+            <p className="mt-3">Please add this exact URL to your project's <strong>Authorized JavaScript origins</strong> list.</p>
+            <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="mt-4 inline-block font-bold text-indigo-300 hover:underline">
+                Open Google Cloud Credentials ↗
+            </a>
+        </div>
+        ) : (
+          <div className={`mt-4 text-sm leading-relaxed p-4 rounded-xl border ${error ? 'text-red-300 bg-red-900/30 border-red-500/30' : 'text-gray-400 border-gray-700'}`}>
+            {error || status}
           </div>
-        </div>
+        )}
 
-        <div className="p-4 border-t border-gray-700 text-center">
-            <p className="text-xs text-gray-500">This is a simulated file picker with public domain books from Project Gutenberg.</p>
-        </div>
+        {error && (
+          <div className="mt-6 space-y-3">
+             <p className="text-xs text-gray-500">Ensure your Client ID and API Key are from the same Google Cloud project.</p>
+             <button 
+                onClick={handleResetClientId} 
+                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-lg active:scale-95"
+            >
+                Reset & Try New Credentials
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
