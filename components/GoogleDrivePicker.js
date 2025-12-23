@@ -74,7 +74,9 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
         }, 100); 
 
     } catch (err) {
-        setError('Failed to create picker. Check if the API Key has the Drive API enabled and no strict restrictions.');
+        // The Google Picker library can throw an error like "API developer key is invalid"
+        // This is caught here and will be reflected in the error state.
+        setError(err.message || 'Failed to create picker. Check if the API Key has the Drive API enabled and no strict restrictions.');
     }
   }, [pickerCallback, apiKey]);
   
@@ -100,6 +102,7 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
                             console.error('Auth Error:', tokenResponse);
                             let detailedError = `Authentication failed: ${tokenResponse.error_description || tokenResponse.error}`;
                             
+                            // Specific handling for redirect_uri_mismatch and origin mismatch
                             if (tokenResponse.error === 'invalid_request' && tokenResponse.error_description?.includes('redirect_uri_mismatch')) {
                                 detailedError = "Error 400: Redirect URI Mismatch. Check Google Cloud Console settings.";
                             } else if (tokenResponse.error === 'invalid_request') {
@@ -132,7 +135,7 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
   }, [createPicker, clientId]);
 
   const isOriginOrRedirectError = error?.includes('Error 400');
-  const isApiKeyInvalidError = error?.includes('API developer key is invalid') || (error && (error.includes('Failed to open file picker') || error.includes('Failed to create picker')) && !error?.includes('Error 400'));
+  const isApiKeyInvalidError = error?.includes('The API developer key is invalid') || (error && (error.includes('Failed to open file picker') || error.includes('Failed to create picker')) && !isOriginOrRedirectError);
 
   return React.createElement(
     "div",
@@ -245,7 +248,7 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
           React.createElement(
             "p",
             { className: "mb-3" },
-            "Your Google Cloud API Key appears to be invalid or incorrectly configured."
+            "Your Google Cloud API Key appears to be invalid or incorrectly configured. This is often due to an incorrect key or missing API enablement."
           ),
           React.createElement(
             "ul",
@@ -253,14 +256,16 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
             React.createElement(
               "li",
               null,
-              "Ensure the API Key is correct and not mistyped."
+              "Double-check that your API Key is copied correctly without typos."
             ),
             React.createElement(
               "li",
               null,
               "Verify that the ",
               React.createElement("strong", null, "Google Drive API"),
-              " is enabled for your Google Cloud Project."
+              " is ",
+              React.createElement("strong", null, "enabled"),
+              " in the Google Cloud Project for this API Key."
             ),
             React.createElement(
               "li",
@@ -269,7 +274,7 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
               React.createElement("strong", null, "API Restrictions"),
               " (e.g., HTTP referers) enabled for this API Key, ensure that ",
               React.createElement("code", { className: "text-red-200 text-xs font-mono" }, window.location.origin),
-              " is added to the list."
+              " is added to the list of allowed referrers."
             )
           ),
           React.createElement(
