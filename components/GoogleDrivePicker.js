@@ -103,8 +103,11 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
                             console.error('Auth Error:', tokenResponse);
                             let detailedError = `Authentication failed: ${tokenResponse.error_description || tokenResponse.error}`;
                             
-                            if (tokenResponse.error === 'invalid_request') {
-                                detailedError = "Error 400: Origin mismatch or wrong Project ID. Check Google Console origins.";
+                            // Specific handling for redirect_uri_mismatch and origin mismatch
+                            if (tokenResponse.error === 'invalid_request' && tokenResponse.error_description?.includes('redirect_uri_mismatch')) {
+                                detailedError = "Error 400: Redirect URI Mismatch. Check Google Cloud Console settings.";
+                            } else if (tokenResponse.error === 'invalid_request') {
+                                detailedError = "Error 400: Origin mismatch or wrong Project ID. Check Google Cloud Console settings.";
                             }
                             
                             setError(detailedError);
@@ -132,8 +135,8 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
     return () => clearInterval(intervalId);
   }, [createPicker, clientId]);
 
-  const isOriginError = error?.includes('Error 400: Origin mismatch');
-  const isApiKeyInvalidError = error?.includes('API developer key is invalid') || (error && (error.includes('Failed to open file picker') || error.includes('Failed to create picker')) && !error.includes('Origin mismatch'));
+  const isOriginOrRedirectError = error?.includes('Error 400');
+  const isApiKeyInvalidError = error?.includes('API developer key is invalid') || (error && (error.includes('Failed to open file picker') || error.includes('Failed to create picker')) && !error?.includes('Error 400'));
 
   return React.createElement(
     "div",
@@ -163,28 +166,56 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
         { className: "text-2xl font-bold text-white mb-2" },
         "Google Drive"
       ),
-      isOriginError ? (
+      isOriginOrRedirectError ? (
         React.createElement(
           "div",
           { className: "mt-4 text-left text-sm leading-relaxed p-4 rounded-xl border text-red-300 bg-red-900/30 border-red-500/30" },
           React.createElement(
             "strong",
             { className: "font-bold text-red-200 block mb-2" },
-            "Error 400: Configuration Error"
+            "Error 400: Configuration Issue (Origin/Redirect Mismatch)"
           ),
           React.createElement(
             "p",
             { className: "mb-3" },
-            "This usually means your app's URL is not whitelisted in your Google Cloud Project."
+            "Google is rejecting the authentication request. This is usually due to incorrect settings in your Google Cloud Project."
+          ),
+          React.createElement(
+            "ul",
+            { className: "list-disc list-inside space-y-2 opacity-80" },
+            React.createElement(
+              "li",
+              null,
+              "Ensure your app's origin is listed under ",
+              React.createElement("strong", null, "Authorized JavaScript origins"),
+              "."
+            ),
+            React.createElement(
+              "li",
+              null,
+              "Specifically, add this URL: ",
+              React.createElement("code", { className: "text-red-200 text-xs font-mono" }, window.location.origin)
+            ),
+            React.createElement(
+              "li",
+              null,
+              "For some environments, you might also need to add your origin to ",
+              React.createElement("strong", null, "Authorized redirect URIs"),
+              " (e.g., ",
+              React.createElement("code", { className: "text-red-200 text-xs font-mono" }, window.location.origin),
+              " or ",
+              React.createElement("code", { className: "text-red-200 text-xs font-mono" }, `storagerelay://${window.location.origin}?id=...`),
+              " if you see a 'redirect_uri_mismatch' specifically mentioning 'storagerelay'."
+            )
           ),
           React.createElement(
             "p",
-            { className: "mb-1 text-xs text-red-200/70" },
-            "Required URL:"
+            { className: "mt-3" },
+            "Review your OAuth 2.0 Client ID credentials."
           ),
           React.createElement(
             "div",
-            { className: "bg-gray-900/50 p-3 rounded-lg flex items-center justify-between border border-red-500/20" },
+            { className: "mt-4 bg-gray-900/50 p-3 rounded-lg flex items-center justify-between border border-red-500/20" },
             React.createElement(
               "code",
               { className: "text-red-200 text-xs font-mono" },
@@ -199,17 +230,6 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
               },
               showCopySuccess ? 'Copied!' : 'Copy'
             )
-          ),
-          React.createElement(
-            "p",
-            { className: "mt-3" },
-            "Please add this exact URL to your project's ",
-            React.createElement(
-              "strong",
-              null,
-              "Authorized JavaScript origins"
-            ),
-            " list."
           ),
           React.createElement(
             "a",
