@@ -69,7 +69,7 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
           .build();
         picker.setVisible(true);
     } catch (err) {
-        setError('Failed to create picker. Check if the API Key has the Drive API enabled and no strict restrictions.');
+        setError(err.message || 'Failed to create picker. Check if the API Key has the Drive API enabled and no strict restrictions.');
     }
   }, [pickerCallback, apiKey]);
   
@@ -120,7 +120,8 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
     return () => clearInterval(intervalId);
   }, [createPicker, clientId]);
 
-  const isOriginError = error?.includes('Error 400');
+  const isOriginError = error?.includes('Error 400: Origin mismatch');
+  const isApiKeyInvalidError = error?.includes('API developer key is invalid') || error?.includes('Failed to create picker'); // Catch generic picker creation failure too
 
   return React.createElement(
     "div",
@@ -204,7 +205,52 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
             "Open Google Cloud Credentials \u2197"
           )
         )
-      ) : (
+      ) : isApiKeyInvalidError ? (
+        React.createElement(
+          "div",
+          { className: "mt-4 text-left text-sm leading-relaxed p-4 rounded-xl border text-red-300 bg-red-900/30 border-red-500/30" },
+          React.createElement(
+            "strong",
+            { className: "font-bold text-red-200 block mb-2" },
+            "API Key Invalid or Misconfigured"
+          ),
+          React.createElement(
+            "p",
+            { className: "mb-3" },
+            "Your Google Cloud API Key appears to be invalid or incorrectly configured."
+          ),
+          React.createElement(
+            "ul",
+            { className: "list-disc list-inside space-y-2 opacity-80" },
+            React.createElement(
+              "li",
+              null,
+              "Ensure the API Key is correct and not mistyped."
+            ),
+            React.createElement(
+              "li",
+              null,
+              "Verify that the ",
+              React.createElement("strong", null, "Google Drive API"),
+              " is enabled for your Google Cloud Project."
+            ),
+            React.createElement(
+              "li",
+              null,
+              "If you have ",
+              React.createElement("strong", null, "API Restrictions"),
+              " (e.g., HTTP referers) enabled for this API Key, ensure that ",
+              React.createElement("code", { className: "text-red-200 text-xs font-mono" }, window.location.origin),
+              " is added to the list."
+            )
+          ),
+          React.createElement(
+            "a",
+            { href: "https://console.cloud.google.com/apis/credentials", target: "_blank", rel: "noopener noreferrer", className: "mt-4 inline-block font-bold text-indigo-300 hover:underline" },
+            "Open Google Cloud Credentials \u2197"
+          )
+        )
+      ) : ( // Generic error or status
         React.createElement(
           "div",
           { className: `mt-4 text-sm leading-relaxed p-4 rounded-xl border ${error ? 'text-red-300 bg-red-900/30 border-red-500/30' : 'text-gray-400 border-gray-700'}` },
