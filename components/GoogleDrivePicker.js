@@ -27,7 +27,7 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
     if (data.action === google.picker.Action.PICKED) {
       const doc = data.docs[0];
       setStatus(`Downloading ${doc.name}...`);
-      
+
       try {
         const response = await fetch(`https://www.googleapis.com/drive/v3/files/${doc.id}?alt=media`, {
           headers: {
@@ -55,79 +55,80 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
 
   const createPicker = useCallback(() => {
     if (!pickerApiLoaded.current || !oauthToken.current) return;
-    
+
     setStatus('Opening file picker...');
     try {
-        const view = new google.picker.View(google.picker.ViewId.DOCS);
-        view.setMimeTypes("application/epub+zip,application/pdf,text/plain");
+      const view = new google.picker.View(google.picker.ViewId.DOCS);
+      view.setMimeTypes("application/epub+zip,application/pdf,text/plain");
 
-        const picker = new google.picker.PickerBuilder()
-          .addView(view)
-          .setOAuthToken(oauthToken.current.access_token)
-          .setDeveloperKey(apiKey)
-          .setCallback(pickerCallback)
-          .build();
-        
-        // Add a small delay before showing the picker to mitigate timing issues.
-        setTimeout(() => {
-            picker.setVisible(true);
-        }, 100); 
+      const picker = new google.picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(oauthToken.current.access_token)
+        .setDeveloperKey(apiKey)
+        .setCallback(pickerCallback)
+        .setOrigin(window.location.origin)
+        .build();
+
+      // Add a small delay before showing the picker to mitigate timing issues.
+      setTimeout(() => {
+        picker.setVisible(true);
+      }, 100);
 
     } catch (err) {
-        // The Google Picker library can throw an error like "API developer key is invalid"
-        // This is caught here and will be reflected in the error state.
-        setError(err.message || 'Failed to create picker. Check if the API Key has the Drive API enabled and no strict restrictions.');
+      // The Google Picker library can throw an error like "API developer key is invalid"
+      // This is caught here and will be reflected in the error state.
+      setError(err.message || 'Failed to create picker. Check if the API Key has the Drive API enabled and no strict restrictions.');
     }
   }, [pickerCallback, apiKey]);
-  
+
   useEffect(() => {
     console.log("Using Google Client ID for authentication:", clientId);
 
     const initializeAndAuth = () => {
-        setStatus('Loading Google API...');
-        if (typeof gapi === 'undefined' || typeof google === 'undefined' || !gapi.load || !google.accounts) {
-          setError('Google API scripts not fully loaded. Check network and script tags.');
-          return;
-        }
+      setStatus('Loading Google API...');
+      if (typeof gapi === 'undefined' || typeof google === 'undefined' || !gapi.load || !google.accounts) {
+        setError('Google API scripts not fully loaded. Check network and script tags.');
+        return;
+      }
 
-        gapi.load('picker', () => {
-            pickerApiLoaded.current = true;
-            setStatus('Authenticating...');
-            try {
-                const tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: clientId,
-                    scope: SCOPES,
-                    callback: (tokenResponse) => {
-                        if (tokenResponse.error) {
-                            console.error('Auth Error:', tokenResponse);
-                            let detailedError = `Authentication failed: ${tokenResponse.error_description || tokenResponse.error}`;
-                            
-                            // Specific handling for redirect_uri_mismatch and origin mismatch
-                            if (tokenResponse.error === 'invalid_request' && tokenResponse.error_description?.includes('redirect_uri_mismatch')) {
-                                detailedError = "Error 400: Redirect URI Mismatch. Check Google Cloud Console settings.";
-                            } else if (tokenResponse.error === 'invalid_request') {
-                                detailedError = "Error 400: Origin mismatch or wrong Project ID. Check Google Cloud Console settings.";
-                            }
-                            
-                            setError(detailedError);
-                            return;
-                        }
-                        oauthToken.current = tokenResponse;
-                        createPicker();
-                    },
-                });
-                tokenClient.requestAccessToken({ prompt: '' });
-            } catch (err) {
-                setError(`GSI Client Error: ${err.message || 'Unknown GSI error'}`);
-            }
-        });
+      gapi.load('picker', () => {
+        pickerApiLoaded.current = true;
+        setStatus('Authenticating...');
+        try {
+          const tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: SCOPES,
+            callback: (tokenResponse) => {
+              if (tokenResponse.error) {
+                console.error('Auth Error:', tokenResponse);
+                let detailedError = `Authentication failed: ${tokenResponse.error_description || tokenResponse.error}`;
+
+                // Specific handling for redirect_uri_mismatch and origin mismatch
+                if (tokenResponse.error === 'invalid_request' && tokenResponse.error_description?.includes('redirect_uri_mismatch')) {
+                  detailedError = "Error 400: Redirect URI Mismatch. Check Google Cloud Console settings.";
+                } else if (tokenResponse.error === 'invalid_request') {
+                  detailedError = "Error 400: Origin mismatch or wrong Project ID. Check Google Cloud Console settings.";
+                }
+
+                setError(detailedError);
+                return;
+              }
+              oauthToken.current = tokenResponse;
+              createPicker();
+            },
+          });
+          tokenClient.requestAccessToken({ prompt: '' });
+        } catch (err) {
+          setError(`GSI Client Error: ${err.message || 'Unknown GSI error'}`);
+        }
+      });
     };
 
     const checkGapiReady = () => {
-        if (typeof gapi !== 'undefined' && typeof google !== 'undefined' && gapi.load && google.accounts) {
-            clearInterval(intervalId);
-            initializeAndAuth();
-        }
+      if (typeof gapi !== 'undefined' && typeof google !== 'undefined' && gapi.load && google.accounts) {
+        clearInterval(intervalId);
+        initializeAndAuth();
+      }
     };
 
     const intervalId = setInterval(checkGapiReady, 100);
@@ -291,23 +292,23 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
         )
       ),
       error &&
+      React.createElement(
+        "div",
+        { className: "mt-6 space-y-3" },
         React.createElement(
-          "div",
-          { className: "mt-6 space-y-3" },
-          React.createElement(
-            "p",
-            { className: "text-xs text-gray-500" },
-            "Ensure your Client ID and API Key are from the same Google Cloud project."
-          ),
-          React.createElement(
-            "button",
-            {
-              onClick: handleResetClientId,
-              className: "w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-lg active:scale-95"
-            },
-            "Reset & Try New Credentials"
-          )
+          "p",
+          { className: "text-xs text-gray-500" },
+          "Ensure your Client ID and API Key are from the same Google Cloud project."
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: handleResetClientId,
+            className: "w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-lg active:scale-95"
+          },
+          "Reset & Try New Credentials"
         )
+      )
     )
   );
 };
