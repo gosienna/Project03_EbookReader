@@ -74,18 +74,15 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
         }, 100); 
 
     } catch (err) {
-        // Catch generic picker creation failure too
-        setError(err.message || 'Failed to open file picker. Check API key and Drive API.');
+        setError('Failed to create picker. Check if the API Key has the Drive API enabled and no strict restrictions.');
     }
   }, [pickerCallback, apiKey]);
   
   useEffect(() => {
-    // Log the Client ID being used for this authentication attempt.
     console.log("Using Google Client ID for authentication:", clientId);
 
     const initializeAndAuth = () => {
         setStatus('Loading Google API...');
-        // Ensure gapi and google.accounts are fully loaded before proceeding
         if (typeof gapi === 'undefined' || typeof google === 'undefined' || !gapi.load || !google.accounts) {
           setError('Google API scripts not fully loaded. Check network and script tags.');
           return;
@@ -103,7 +100,6 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
                             console.error('Auth Error:', tokenResponse);
                             let detailedError = `Authentication failed: ${tokenResponse.error_description || tokenResponse.error}`;
                             
-                            // Specific handling for redirect_uri_mismatch and origin mismatch
                             if (tokenResponse.error === 'invalid_request' && tokenResponse.error_description?.includes('redirect_uri_mismatch')) {
                                 detailedError = "Error 400: Redirect URI Mismatch. Check Google Cloud Console settings.";
                             } else if (tokenResponse.error === 'invalid_request') {

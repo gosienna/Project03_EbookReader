@@ -1,9 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 
-// epubjs is loaded from a CDN, so we declare it as any
-// declare const ePub: any; // Removed as it's a TypeScript declaration
-
 export const EpubViewer = ({ data }) => {
   const viewerRef = useRef(null);
   const renditionRef = useRef(null);
