@@ -67,7 +67,12 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
           .setDeveloperKey(apiKey)
           .setCallback(pickerCallback)
           .build();
-        picker.setVisible(true);
+        
+        // Add a small delay before showing the picker to mitigate timing issues.
+        setTimeout(() => {
+            picker.setVisible(true);
+        }, 100); 
+
     } catch (err) {
         setError(err.message || 'Failed to create picker. Check if the API Key has the Drive API enabled and no strict restrictions.');
     }
@@ -121,7 +126,7 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
   }, [createPicker, clientId]);
 
   const isOriginError = error?.includes('Error 400: Origin mismatch');
-  const isApiKeyInvalidError = error?.includes('API developer key is invalid') || error?.includes('Failed to create picker'); // Catch generic picker creation failure too
+  const isApiKeyInvalidError = error?.includes('API developer key is invalid') || (error && error.includes('Failed to create picker') && !error.includes('Origin mismatch'));
 
   return React.createElement(
     "div",
