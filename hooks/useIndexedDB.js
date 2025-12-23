@@ -14,18 +14,18 @@ export const useIndexedDB = () => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = (event) => {
-      console.error('Database error:', (event.target).error);
+      console.error('Database error:', event.target.error);
       setIsInitialized(true); // Still allow app to run
     };
 
     request.onsuccess = (event) => {
-      const dbInstance = (event.target).result;
+      const dbInstance = event.target.result;
       setDb(dbInstance);
       setIsInitialized(true);
     };
 
     request.onupgradeneeded = (event) => {
-      const dbInstance = (event.target).result;
+      const dbInstance = event.target.result;
       if (!dbInstance.objectStoreNames.contains(STORE_NAME)) {
         dbInstance.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
       }
@@ -43,11 +43,11 @@ export const useIndexedDB = () => {
     const getAllRequest = objectStore.getAll();
 
     getAllRequest.onsuccess = (event) => {
-      const result = (event.target).result;
+      const result = event.target.result;
       setBooks(result.sort((a,b) => b.added.getTime() - a.added.getTime()));
     };
     getAllRequest.onerror = (event) => {
-      console.error('Error fetching books:', (event.target).error);
+      console.error('Error fetching books:', event.target.error);
     };
   }, [db]);
 
@@ -80,8 +80,8 @@ export const useIndexedDB = () => {
         };
 
         addRequest.onerror = (event) => {
-            console.error('Error adding book:', (event.target).error);
-            reject((event.target).error);
+            console.error('Error adding book:', event.target.error);
+            reject(event.target.error);
         };
     });
   }, [db, loadBooks]);
@@ -96,7 +96,7 @@ export const useIndexedDB = () => {
         loadBooks();
     };
      deleteRequest.onerror = (event) => {
-        console.error('Error deleting book:', (event.target).error);
+        console.error('Error deleting book:', event.target.error);
     };
   }, [db, loadBooks]);
 
@@ -110,7 +110,7 @@ export const useIndexedDB = () => {
         setBooks([]);
     };
      clearRequest.onerror = (event) => {
-        console.error('Error clearing books:', (event.target).error);
+        console.error('Error clearing books:', event.target.error);
     };
   }, [db]);
 

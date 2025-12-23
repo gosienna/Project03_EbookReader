@@ -74,7 +74,8 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
         }, 100); 
 
     } catch (err) {
-        setError(err.message || 'Failed to create picker. Check if the API Key has the Drive API enabled and no strict restrictions.');
+        // Catch generic picker creation failure too
+        setError(err.message || 'Failed to open file picker. Check API key and Drive API.');
     }
   }, [pickerCallback, apiKey]);
   
@@ -84,6 +85,12 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
 
     const initializeAndAuth = () => {
         setStatus('Loading Google API...');
+        // Ensure gapi and google.accounts are fully loaded before proceeding
+        if (typeof gapi === 'undefined' || typeof google === 'undefined' || !gapi.load || !google.accounts) {
+          setError('Google API scripts not fully loaded. Check network and script tags.');
+          return;
+        }
+
         gapi.load('picker', () => {
             pickerApiLoaded.current = true;
             setStatus('Authenticating...');
@@ -109,7 +116,7 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
                 });
                 tokenClient.requestAccessToken({ prompt: '' });
             } catch (err) {
-                setError(`GSI Client Error: ${err.message}`);
+                setError(`GSI Client Error: ${err.message || 'Unknown GSI error'}`);
             }
         });
     };
@@ -126,7 +133,7 @@ export const GoogleDrivePicker = ({ clientId, apiKey, onClose, onFileSelect }) =
   }, [createPicker, clientId]);
 
   const isOriginError = error?.includes('Error 400: Origin mismatch');
-  const isApiKeyInvalidError = error?.includes('API developer key is invalid') || (error && error.includes('Failed to create picker') && !error.includes('Origin mismatch'));
+  const isApiKeyInvalidError = error?.includes('API developer key is invalid') || (error && (error.includes('Failed to open file picker') || error.includes('Failed to create picker')) && !error.includes('Origin mismatch'));
 
   return React.createElement(
     "div",
